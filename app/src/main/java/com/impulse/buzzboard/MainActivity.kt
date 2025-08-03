@@ -27,6 +27,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var drawerToggle: androidx.appcompat.app.ActionBarDrawerToggle
     private var newsDataApiKey: String = BuildConfig.NEWS_DATA_API_KEY
 
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -42,8 +43,18 @@ class MainActivity : AppCompatActivity() {
         // Ensure hamburger icon is visible
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         supportActionBar?.setHomeAsUpIndicator(androidx.appcompat.R.drawable.abc_ic_ab_back_material)
-        toolbar.setTitleTextColor(resources.getColor(android.R.color.white))
-        toolbar.setBackgroundColor(resources.getColor(android.R.color.holo_purple))
+        toolbar.setTitleTextColor(
+            androidx.core.content.ContextCompat.getColor(
+                this,
+                android.R.color.white
+            )
+        )
+        toolbar.setBackgroundColor(
+            androidx.core.content.ContextCompat.getColor(
+                this,
+                android.R.color.holo_purple
+            )
+        )
 
         drawerLayout = findViewById(R.id.drawer_layout)
         navigationView = findViewById(R.id.nav_view)
@@ -56,7 +67,6 @@ class MainActivity : AppCompatActivity() {
         }
         rvHeadlines.adapter = headlinesAdapter
 
-        // Set up hamburger icon and drawer toggle
         drawerToggle = androidx.appcompat.app.ActionBarDrawerToggle(
             this, drawerLayout, toolbar,
             R.string.navigation_drawer_open, R.string.navigation_drawer_close
@@ -64,7 +74,6 @@ class MainActivity : AppCompatActivity() {
         drawerLayout.addDrawerListener(drawerToggle)
         drawerToggle.syncState()
 
-        // Fetch headlines for default category
         fetchHeadlines("top")
 
         navigationView.setNavigationItemSelectedListener { menuItem ->
@@ -82,14 +91,19 @@ class MainActivity : AppCompatActivity() {
             drawerLayout.closeDrawers()
             true
         }
-    }
-    //Handle back press to close drawer if open
-    override fun onBackPressed() {
-        if (drawerLayout.isDrawerOpen(GravityCompat.START)) {
-            drawerLayout.closeDrawer(GravityCompat.START)
-        } else {
-            super.onBackPressed()
-        }
+
+        // Register back press callback to handle drawer
+        onBackPressedDispatcher.addCallback(this, object : androidx.activity.OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (drawerLayout.isDrawerOpen(GravityCompat.START)) {
+                    drawerLayout.closeDrawer(GravityCompat.START)
+                } else {
+                    // Remove this callback and propagate back press
+                    isEnabled = false
+                    onBackPressedDispatcher.onBackPressed()
+                }
+            }
+        })
     }
 
 
@@ -131,7 +145,7 @@ interface NewsDataApiService {
         @Query("apikey") apiKey: String,
         @Query("category") category: String,
         @Query("language") language: String = "en",
-        @Query("country") country: String = "us"
+        @Query("country") country: String = "in"
     ): NewsDataApiResponse
 }
 
