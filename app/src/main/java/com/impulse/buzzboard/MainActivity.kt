@@ -27,6 +27,12 @@ class MainActivity : AppCompatActivity() {
     private lateinit var drawerToggle: androidx.appcompat.app.ActionBarDrawerToggle
     private var newsDataApiKey: String = BuildConfig.NEWS_DATA_API_KEY
 
+    // Coroutine and pagination variables
+    private val job = SupervisorJob()
+    private var isLoading = false
+    private var nextPage: String? = null
+    private var currentCategory = "top"
+    private var canLoadMore = true
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -73,7 +79,7 @@ class MainActivity : AppCompatActivity() {
         drawerLayout.addDrawerListener(drawerToggle)
         drawerToggle.syncState()
 
-        fetchHeadlines("top")
+        fetchHeadlines(currentCategory, null)
 
         navigationView.setNavigationItemSelectedListener { menuItem ->
             val category = when (menuItem.itemId) {
@@ -86,7 +92,10 @@ class MainActivity : AppCompatActivity() {
                 R.id.category_technology -> "technology"
                 else -> "top"
             }
-            fetchHeadlines(category)
+            currentCategory = category
+            nextPage = null
+            canLoadMore = true
+            fetchHeadlines(currentCategory, null)
             rvHeadlines.scrollToPosition(0)
             drawerLayout.closeDrawers()
             true
@@ -102,35 +111,63 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         })
+
+        // Pagination: load more when scrolled to bottom
+        rvHeadlines.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+                super.onScrolled(recyclerView, dx, dy)
+                val layoutManager = recyclerView.layoutManager as LinearLayoutManager
+                val totalItemCount = layoutManager.itemCount
+                val lastVisibleItem = layoutManager.findLastVisibleItemPosition()
+                if (canLoadMore && !isLoading && totalItemCount > 0 && lastVisibleItem >= totalItemCount - 1) {
+                    fetchHeadlines(currentCategory, nextPage)
+                }
+            }
+        })
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        job.cancel()
+    }
 
-    private fun fetchHeadlines(category: String) {
+    private fun fetchHeadlines(category: String, page: String?) {
+        if (isLoading) return
+
         val retrofitNewsData = Retrofit.Builder()
             .baseUrl("https://newsdata.io/api/1/")
             .addConverterFactory(GsonConverterFactory.create())
             .build()
         val newsDataService = retrofitNewsData.create(NewsDataApiService::class.java)
-        CoroutineScope(Dispatchers.IO).launch {
+        
+        isLoading = true
+        CoroutineScope(Dispatchers.IO + job).launch {
             try {
                 Log.d("API_KEY", "Using API Key: $newsDataApiKey")
-                val newsDataResponse = newsDataService.getTopHeadlines(newsDataApiKey, category, "en", "us")
-                Log.d("API_RESPONSE", "Status: ${newsDataResponse.status}, Articles: ${newsDataResponse.results?.size}")
-                val newsDataArticles = newsDataResponse.results ?: emptyList()
+                val response = newsDataService.getTopHeadlines(
+                    apiKey = newsDataApiKey,
+                    category = category,
+                    language = "en",
+                    country = "in",
+                    page = page
+                )
+                Log.d("API_RESPONSE", "Status: ${response.status}, Articles: ${response.results?.size}, NextPage: ${response.nextPage}")
+                val newsDataArticles = response.results ?: emptyList()
                 withContext(Dispatchers.Main) {
-                    if (newsDataResponse.status == "success" && newsDataArticles.isNotEmpty()) {
+                    if (page == null) {
                         headlinesAdapter.submitList(newsDataArticles)
-                        Toast.makeText(this@MainActivity, "Loaded ${newsDataArticles.size} articles from newsdata.io", Toast.LENGTH_LONG).show()
                     } else {
-                        headlinesAdapter.submitList(emptyList())
-                        Toast.makeText(this@MainActivity, "No news found for this category.", Toast.LENGTH_SHORT).show()
+                        headlinesAdapter.appendList(newsDataArticles)
                     }
+                    isLoading = false
+                    nextPage = response.nextPage
+                    canLoadMore = response.nextPage != null
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
-                    headlinesAdapter.submitList(emptyList())
                     Toast.makeText(this@MainActivity, "Failed to fetch news: ${e.message}", Toast.LENGTH_SHORT).show()
-                    e.printStackTrace() // Add this for debugging
+                    isLoading = false
+                    canLoadMore = false
                 }
             }
         }
@@ -143,13 +180,15 @@ interface NewsDataApiService {
         @Query("apikey") apiKey: String,
         @Query("category") category: String,
         @Query("language") language: String = "en",
-        @Query("country") country: String = "in"
+        @Query("country") country: String = "in",
+        @Query("page") page: String? = null
     ): NewsDataApiResponse
 }
 
 data class NewsDataApiResponse(
     val status: String,
-    val results: List<NewsDataArticle>?
+    val results: List<NewsDataArticle>?,
+    val nextPage: String?
 )
 
 data class NewsDataArticle(
@@ -160,7 +199,7 @@ data class NewsDataArticle(
 )
 
 class HeadlinesAdapter(private val onItemClick: (NewsDataArticle) -> Unit) : RecyclerView.Adapter<HeadlinesViewHolder>() {
-    private var articles: List<NewsDataArticle> = emptyList()
+    private var articles: MutableList<NewsDataArticle> = mutableListOf()
     override fun onCreateViewHolder(parent: android.view.ViewGroup, viewType: Int): HeadlinesViewHolder {
         val view = android.view.LayoutInflater.from(parent.context).inflate(R.layout.item_headline, parent, false)
         return HeadlinesViewHolder(view, onItemClick)
@@ -170,8 +209,17 @@ class HeadlinesAdapter(private val onItemClick: (NewsDataArticle) -> Unit) : Rec
         holder.bind(articles[position])
     }
     fun submitList(list: List<NewsDataArticle>?) {
-        articles = list ?: emptyList()
-        notifyItemRangeChanged(0, articles.size)
+        val oldSize = articles.size
+        articles = (list ?: emptyList()).toMutableList()
+        notifyItemRangeRemoved(0, oldSize)
+        notifyItemRangeInserted(0, articles.size)
+    }
+    fun appendList(list: List<NewsDataArticle>?) {
+        if (list != null && list.isNotEmpty()) {
+            val start = articles.size
+            articles.addAll(list)
+            notifyItemRangeInserted(start, list.size)
+        }
     }
 }
 
