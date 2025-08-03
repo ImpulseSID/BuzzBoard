@@ -143,7 +143,7 @@ class MainActivity : AppCompatActivity() {
         isLoading = true
         CoroutineScope(Dispatchers.IO + job).launch {
             try {
-                Log.d("API_KEY", "Using API Key: $newsDataApiKey")
+                // Log.d("API_KEY", "Using API Key: $newsDataApiKey")
                 val response = newsDataService.getTopHeadlines(
                     apiKey = newsDataApiKey,
                     category = category,
@@ -151,7 +151,7 @@ class MainActivity : AppCompatActivity() {
                     country = "in",
                     page = page
                 )
-                Log.d("API_RESPONSE", "Status: ${response.status}, Articles: ${response.results?.size}, NextPage: ${response.nextPage}")
+                // Log.d("API_RESPONSE", "Status: ${response.status}, Articles: ${response.results?.size}, NextPage: ${response.nextPage}")
                 val newsDataArticles = response.results ?: emptyList()
                 withContext(Dispatchers.Main) {
                     if (page == null) {
@@ -165,7 +165,8 @@ class MainActivity : AppCompatActivity() {
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(this@MainActivity, "Failed to fetch news: ${e.message}", Toast.LENGTH_SHORT).show()
+                    // Only show a simple error message to users
+                    Toast.makeText(this@MainActivity, "Unable to load news", Toast.LENGTH_SHORT).show()
                     isLoading = false
                     canLoadMore = false
                 }
