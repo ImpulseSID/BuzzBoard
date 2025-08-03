@@ -1,6 +1,7 @@
 package com.impulse.buzzboard
 
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
@@ -21,9 +22,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var navigationView: NavigationView
     private lateinit var rvHeadlines: RecyclerView
     private lateinit var headlinesAdapter: HeadlinesAdapter
-    // Use newsdata.io API key
     private var newsDataApiKey: String = BuildConfig.NEWS_DATA_API_KEY
-    private var newsApiKey: String = BuildConfig.NEWS_API_KEY
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -75,83 +74,30 @@ class MainActivity : AppCompatActivity() {
         val newsDataService = retrofitNewsData.create(NewsDataApiService::class.java)
         CoroutineScope(Dispatchers.IO).launch {
             try {
+                Log.d("API_KEY", "Using API Key: $newsDataApiKey")
                 val newsDataResponse = newsDataService.getTopHeadlines(newsDataApiKey, category, "en", "us")
+                Log.d("API_RESPONSE", "Status: ${newsDataResponse.status}, Articles: ${newsDataResponse.results?.size}")
                 val newsDataArticles = newsDataResponse.results ?: emptyList()
-                if (newsDataResponse.status == "success" && newsDataArticles.isNotEmpty()) {
-                    withContext(Dispatchers.Main) {
+                withContext(Dispatchers.Main) {
+                    if (newsDataResponse.status == "success" && newsDataArticles.isNotEmpty()) {
                         headlinesAdapter.submitList(newsDataArticles)
                         Toast.makeText(this@MainActivity, "Loaded ${newsDataArticles.size} articles from newsdata.io", Toast.LENGTH_LONG).show()
-                    }
-                } else {
-                    // Fallback to NewsAPI
-                    val retrofitNewsApi = Retrofit.Builder()
-                        .baseUrl("https://newsapi.org/v2/")
-                        .addConverterFactory(GsonConverterFactory.create())
-                        .build()
-                    val newsApiService = retrofitNewsApi.create(NewsApiService::class.java)
-                    try {
-                        val newsApiResponse = newsApiService.getTopHeadlines(category, newsApiKey)
-                        val newsApiArticles = newsApiResponse.articles ?: emptyList()
-                        withContext(Dispatchers.Main) {
-                            if (newsApiResponse.status == "ok" && newsApiArticles.isNotEmpty()) {
-                                // Convert NewsAPI articles to NewsDataArticle for display
-                                headlinesAdapter.submitList(newsApiArticles.map {
-                                    NewsDataArticle(
-                                        title = it.title,
-                                        description = it.description,
-                                        image_url = it.urlToImage,
-                                        link = it.url
-                                    )
-                                })
-                                Toast.makeText(this@MainActivity, "Loaded ${newsApiArticles.size} articles from NewsAPI", Toast.LENGTH_LONG).show()
-                            } else {
-                                headlinesAdapter.submitList(emptyList())
-                                Toast.makeText(this@MainActivity, "No articles found from either API.", Toast.LENGTH_LONG).show()
-                            }
-                        }
-                    } catch (e: Exception) {
-                        withContext(Dispatchers.Main) {
-                            Toast.makeText(this@MainActivity, "Failed to fetch news from NewsAPI: ${e.message}", Toast.LENGTH_LONG).show()
-                        }
+                    } else {
+                        headlinesAdapter.submitList(emptyList())
+                        Toast.makeText(this@MainActivity, "No news found for this category.", Toast.LENGTH_SHORT).show()
                     }
                 }
             } catch (e: Exception) {
-                // Fallback to NewsAPI if newsdata.io fails
-                val retrofitNewsApi = Retrofit.Builder()
-                    .baseUrl("https://newsapi.org/v2/")
-                    .addConverterFactory(GsonConverterFactory.create())
-                    .build()
-                val newsApiService = retrofitNewsApi.create(NewsApiService::class.java)
-                try {
-                    val newsApiResponse = newsApiService.getTopHeadlines(category, newsApiKey)
-                    val newsApiArticles = newsApiResponse.articles ?: emptyList()
-                    withContext(Dispatchers.Main) {
-                        if (newsApiResponse.status == "ok" && newsApiArticles.isNotEmpty()) {
-                            headlinesAdapter.submitList(newsApiArticles.map {
-                                NewsDataArticle(
-                                    title = it.title,
-                                    description = it.description,
-                                    image_url = it.urlToImage,
-                                    link = it.url
-                                )
-                            })
-                            Toast.makeText(this@MainActivity, "Loaded ${newsApiArticles.size} articles from NewsAPI", Toast.LENGTH_LONG).show()
-                        } else {
-                            headlinesAdapter.submitList(emptyList())
-                            Toast.makeText(this@MainActivity, "No articles found from either API.", Toast.LENGTH_LONG).show()
-                        }
-                    }
-                } catch (e: Exception) {
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(this@MainActivity, "Failed to fetch news from NewsAPI: ${e.message}", Toast.LENGTH_LONG).show()
-                    }
+                withContext(Dispatchers.Main) {
+                    headlinesAdapter.submitList(emptyList())
+                    Toast.makeText(this@MainActivity, "Failed to fetch news: ${e.message}", Toast.LENGTH_SHORT).show()
+                    e.printStackTrace() // Add this for debugging
                 }
             }
         }
     }
 }
 
-// Retrofit API service for newsdata.io
 interface NewsDataApiService {
     @GET("news")
     suspend fun getTopHeadlines(
@@ -162,8 +108,6 @@ interface NewsDataApiService {
     ): NewsDataApiResponse
 }
 
-// Data models for newsdata.io
-// status: "success", results: List<NewsDataArticle>
 data class NewsDataApiResponse(
     val status: String,
     val results: List<NewsDataArticle>?
@@ -176,32 +120,6 @@ data class NewsDataArticle(
     val link: String?
 )
 
-// Retrofit API service for NewsAPI
-interface NewsApiService {
-    @GET("top-headlines")
-    suspend fun getTopHeadlines(
-        @Query("category") category: String,
-        @Query("apiKey") apiKey: String,
-        @Query("country") country: String = "us"
-    ): NewsApiResponse
-}
-
-// Data models for NewsAPI
-// status: "ok", totalResults: Int, articles: List<NewsApiArticle>
-data class NewsApiResponse(
-    val status: String,
-    val totalResults: Int,
-    val articles: List<NewsApiArticle>?
-)
-
-data class NewsApiArticle(
-    val title: String?,
-    val description: String?,
-    val urlToImage: String?,
-    val url: String?
-)
-
-// HeadlinesAdapter (basic, you may need to implement ViewHolder)
 class HeadlinesAdapter(private val onItemClick: (NewsDataArticle) -> Unit) : RecyclerView.Adapter<HeadlinesViewHolder>() {
     private var articles: List<NewsDataArticle> = emptyList()
     override fun onCreateViewHolder(parent: android.view.ViewGroup, viewType: Int): HeadlinesViewHolder {
@@ -224,8 +142,6 @@ class HeadlinesViewHolder(itemView: android.view.View, private val onItemClick: 
         val summary = itemView.findViewById<android.widget.TextView>(R.id.tvSummary)
         title.text = article.title ?: "No Title"
         summary.text = article.description ?: "No Description"
-        // You can use Glide/Picasso for image loading
-        // Glide.with(itemView).load(article.image_url).into(itemView.findViewById(R.id.imgHeadline))
         itemView.setOnClickListener {
             if (!article.link.isNullOrEmpty()) {
                 onItemClick(article)

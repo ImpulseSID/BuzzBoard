@@ -1,7 +1,17 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     id("org.jetbrains.kotlin.kapt")
+}
+
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.inputStream().use { input ->
+        localProperties.load(input)
+    }
 }
 
 android {
@@ -17,8 +27,9 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        val newsApiKey: String? = project.findProperty("NEWS_API_KEY") as String?
-        val newsDataApiKey: String? = project.findProperty("NEWS_DATA_API_KEY") as String?
+        val newsApiKey: String? = localProperties.getProperty("NEWS_API_KEY")
+        val newsDataApiKey: String? = localProperties.getProperty("NEWS_DATA_API_KEY")
+
         buildConfigField("String", "NEWS_API_KEY", "\"${newsApiKey ?: ""}\"")
         buildConfigField("String", "NEWS_DATA_API_KEY", "\"${newsDataApiKey ?: ""}\"")
     }
