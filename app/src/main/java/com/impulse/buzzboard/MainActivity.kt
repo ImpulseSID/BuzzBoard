@@ -11,6 +11,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.navigation.NavigationView
 import android.widget.Toast
+import androidx.core.view.GravityCompat
 import kotlinx.coroutines.*
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
@@ -22,6 +23,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var navigationView: NavigationView
     private lateinit var rvHeadlines: RecyclerView
     private lateinit var headlinesAdapter: HeadlinesAdapter
+    private lateinit var toolbar: androidx.appcompat.widget.Toolbar
+    private lateinit var drawerToggle: androidx.appcompat.app.ActionBarDrawerToggle
     private var newsDataApiKey: String = BuildConfig.NEWS_DATA_API_KEY
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -34,6 +37,14 @@ class MainActivity : AppCompatActivity() {
             insets
         }
 
+        toolbar = findViewById(R.id.toolbar)
+        setSupportActionBar(toolbar)
+        // Ensure hamburger icon is visible
+        supportActionBar?.setDisplayHomeAsUpEnabled(true)
+        supportActionBar?.setHomeAsUpIndicator(androidx.appcompat.R.drawable.abc_ic_ab_back_material)
+        toolbar.setTitleTextColor(resources.getColor(android.R.color.white))
+        toolbar.setBackgroundColor(resources.getColor(android.R.color.holo_purple))
+
         drawerLayout = findViewById(R.id.drawer_layout)
         navigationView = findViewById(R.id.nav_view)
         rvHeadlines = findViewById(R.id.rvHeadlines)
@@ -44,6 +55,14 @@ class MainActivity : AppCompatActivity() {
             startActivity(intent)
         }
         rvHeadlines.adapter = headlinesAdapter
+
+        // Set up hamburger icon and drawer toggle
+        drawerToggle = androidx.appcompat.app.ActionBarDrawerToggle(
+            this, drawerLayout, toolbar,
+            R.string.navigation_drawer_open, R.string.navigation_drawer_close
+        )
+        drawerLayout.addDrawerListener(drawerToggle)
+        drawerToggle.syncState()
 
         // Fetch headlines for default category
         fetchHeadlines("top")
@@ -62,6 +81,14 @@ class MainActivity : AppCompatActivity() {
             fetchHeadlines(category)
             drawerLayout.closeDrawers()
             true
+        }
+    }
+    //Handle back press to close drawer if open
+    override fun onBackPressed() {
+        if (drawerLayout.isDrawerOpen(GravityCompat.START)) {
+            drawerLayout.closeDrawer(GravityCompat.START)
+        } else {
+            super.onBackPressed()
         }
     }
 
@@ -140,8 +167,19 @@ class HeadlinesViewHolder(itemView: android.view.View, private val onItemClick: 
     fun bind(article: NewsDataArticle) {
         val title = itemView.findViewById<android.widget.TextView>(R.id.tvTitle)
         val summary = itemView.findViewById<android.widget.TextView>(R.id.tvSummary)
+        val image = itemView.findViewById<android.widget.ImageView>(R.id.imgHeadline)
         title.text = article.title ?: "No Title"
         summary.text = article.description ?: "No Description"
+        // Load image using Glide
+        if (!article.image_url.isNullOrEmpty()) {
+            com.bumptech.glide.Glide.with(itemView.context)
+                .load(article.image_url)
+                .placeholder(android.R.color.darker_gray)
+                .error(android.R.color.darker_gray)
+                .into(image)
+        } else {
+            image.setImageResource(android.R.color.darker_gray)
+        }
         itemView.setOnClickListener {
             if (!article.link.isNullOrEmpty()) {
                 onItemClick(article)
