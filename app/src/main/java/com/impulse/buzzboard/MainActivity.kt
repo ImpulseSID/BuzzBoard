@@ -40,7 +40,6 @@ class MainActivity : AppCompatActivity() {
 
         toolbar = findViewById(R.id.toolbar)
         setSupportActionBar(toolbar)
-        // Ensure hamburger icon is visible
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         supportActionBar?.setHomeAsUpIndicator(androidx.appcompat.R.drawable.abc_ic_ab_back_material)
         toolbar.setTitleTextColor(
@@ -52,7 +51,7 @@ class MainActivity : AppCompatActivity() {
         toolbar.setBackgroundColor(
             androidx.core.content.ContextCompat.getColor(
                 this,
-                android.R.color.holo_purple
+                R.color.teal
             )
         )
 
@@ -88,17 +87,16 @@ class MainActivity : AppCompatActivity() {
                 else -> "top"
             }
             fetchHeadlines(category)
+            rvHeadlines.scrollToPosition(0)
             drawerLayout.closeDrawers()
             true
         }
 
-        // Register back press callback to handle drawer
         onBackPressedDispatcher.addCallback(this, object : androidx.activity.OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (drawerLayout.isDrawerOpen(GravityCompat.START)) {
                     drawerLayout.closeDrawer(GravityCompat.START)
                 } else {
-                    // Remove this callback and propagate back press
                     isEnabled = false
                     onBackPressedDispatcher.onBackPressed()
                 }
@@ -184,6 +182,7 @@ class HeadlinesViewHolder(itemView: android.view.View, private val onItemClick: 
         val image = itemView.findViewById<android.widget.ImageView>(R.id.imgHeadline)
         title.text = article.title ?: "No Title"
         summary.text = article.description ?: "No Description"
+
         // Load image using Glide
         if (!article.image_url.isNullOrEmpty()) {
             com.bumptech.glide.Glide.with(itemView.context)
